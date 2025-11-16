@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Trading Agent Dashboard{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://unpkg.com/htmx.org@2.0.2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        :root {
+            --bg-body: #f3f4f6;
+            --bg-card: #ffffff;
+            --border-subtle: #e5e7eb;
+            --accent: #2563eb;
+            --accent-soft: rgba(37, 99, 235, 0.08);
+            --text-main: #111827;
+            --text-muted: #6b7280;
+        }
+
+        body {
+            padding: 1.5rem;
+            background: radial-gradient(circle at top left, #e5e7eb 0, #f9fafb 40%, #f3f4f6 100%);
+            color: var(--text-main);
+            font-size: 15px;
+        }
+
+        main.container {
+            max-width: 1180px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: #0f172a;
+        }
+
+        header p {
+            color: var(--text-muted);
+            margin-bottom: 0.35rem;
+            font-size: 0.95rem;
+        }
+
+        .header-strip {
+            margin-bottom: 0.5rem;
+        }
+
+        .layout-root {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .layout-main-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+            gap: 1.25rem;
+            align-items: flex-start;
+        }
+
+        .card {
+            padding: 1rem 1.1rem;
+            border-radius: 0.9rem;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+        }
+
+        .card h2 {
+            font-size: 1.05rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.15rem;
+            color: #111827;
+        }
+
+        .card h2 span.accent-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--accent);
+        }
+
+        .card-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.75rem;
+        }
+
+        .refresh-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 0.4rem;
+        }
+
+        .refresh-btn-global {
+            border-radius: 999px;
+            border: 1px solid #d1d5db;
+            padding: 0.4rem 0.95rem;
+            font-size: 0.85rem;
+            background: #ffffff;
+            color: #111827;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .refresh-btn-global:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-soft);
+        }
+
+        .open-positions-row {
+            display: flex;
+            gap: 0.9rem;
+            overflow-x: auto;
+            padding-bottom: 0.25rem;
+            scrollbar-width: thin;
+        }
+
+        .position-card {
+            min-width: 220px;
+            border-radius: 0.8rem;
+            border: 1px solid #e5e7eb;
+            padding: 0.75rem 0.8rem;
+            background: #f9fafb;
+        }
+
+        .position-card small {
+            color: var(--text-muted);
+        }
+
+        .pnl-positive {
+            color: #16a34a;
+            font-weight: 600;
+        }
+
+        .pnl-negative {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        .operations-column {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 72vh;
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+
+        .operation-card {
+            border-radius: 0.8rem;
+            border: 1px solid #e5e7eb;
+            padding: 0.75rem 0.8rem;
+            background: #f9fafb;
+        }
+
+        .operation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.35rem;
+        }
+
+        .operation-title {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+        }
+
+        .operation-tags {
+            display: flex;
+            gap: 0.3rem;
+            flex-wrap: wrap;
+            font-size: 0.75rem;
+        }
+
+        .tag {
+            border-radius: 999px;
+            padding: 0.15rem 0.6rem;
+            border: 1px solid #d1d5db;
+            background: #ffffff;
+        }
+
+        .tag-long {
+            background: #ecfdf3;
+            border-color: #22c55e;
+            color: #166534;
+        }
+
+        .tag-short {
+            background: #fef2f2;
+            border-color: #f97373;
+            color: #b91c1c;
+        }
+
+        details summary {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        details summary:hover {
+            color: var(--accent);
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 260px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            background: #f3f4f6;
+            padding: 0.5rem 0.6rem;
+            border-radius: 0.6rem;
+            border: 1px solid #e5e7eb;
+        }
+
+        table {
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            white-space: nowrap;
+        }
+
+        a {
+            color: #2563eb;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 900px) {
+            body {
+                padding: 0.9rem;
+            }
+
+            .layout-main-row {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .operations-column {
+                max-height: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="container layout-root">
+        <header>
+            <div class="header-strip">
+                <div>
+                    <h1>Trading Agent Dashboard</h1>
+                    <p>
+                        Progetto didattico a cura di Simone Rizzo della serie YouTube
+                        <a href="https://www.youtube.com/watch?v=Vrl2Ar_SvSo&list=PLYtHoWz0tONvqawl66HkjgLkEy7xi_6Yp" target="_blank" rel="noopener noreferrer">
+                            "Creo il mio AI trading agent"
+                        </a>.
+                    </p>
+                    <p>
+                        Tutto il codice dell'agente è disponibile all'interno della
+                        <a href="http://rizzoaiacademy.com/" target="_blank" rel="noopener noreferrer">Rizzo AI Academy</a>.
+                        <br>
+                        Per aggiornamenti costanti puoi seguire
+                        <a href="https://www.instagram.com/simorizzo_ai/" target="_blank" rel="noopener noreferrer">@simorizzo_ai su Instagram</a>.
+                    </p>
+                </div>
+            </div>
+            <div class="refresh-row">
+                <button
+                    id="refresh-all"
+                    class="refresh-btn-global"
+                    onclick="window.location.reload()"
+                >
+                    🔄 Aggiorna tutto
+                </button>
+            </div>
+        </header>
+
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

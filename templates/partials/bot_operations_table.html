@@ -1,0 +1,56 @@
+{% if operations %}
+<div class="operations-column">
+    {% for op in operations %}
+    <article class="operation-card">
+        <div class="operation-header">
+            <div>
+                <strong>{{ op.operation|upper }}</strong>
+                {% if op.symbol %}<span> · {{ op.symbol }}</span>{% endif %}
+            </div>
+            <small>{{ op.created_at }}</small>
+        </div>
+
+        <div class="operation-tags">
+            <span class="tag">ID #{{ op.id }}</span>
+            {% if op.direction %}
+            <span class="tag {% if op.direction|lower == 'long' %}tag-long{% elif op.direction|lower == 'short' %}tag-short{% endif %}">
+                {{ op.direction|capitalize }}
+            </span>
+            {% endif %}
+            {% if op.target_portion_of_balance is not none %}
+            <span class="tag">Target: {{ '%.1f' | format(op.target_portion_of_balance * 100) }}%</span>
+            {% endif %}
+            {% if op.leverage is not none %}
+            <span class="tag">Lev: {{ op.leverage }}x</span>
+            {% endif %}
+        </div>
+
+        {% set reason = op.raw_payload.get('reason') or op.raw_payload.get('motivation') or op.raw_payload.get('comment') %}
+        {% if reason %}
+        <p style="margin-top:0.5rem; margin-bottom:0.5rem;">
+            {{ reason | truncate(180, True, '…') }}
+        </p>
+        {% endif %}
+
+        <details>
+            <summary>Vedi ragionamento completo</summary>
+            <pre>{{ reason or 'Nessun testo di ragionamento disponibile.' }}</pre>
+        </details>
+
+        {% if op.system_prompt %}
+        <details style="margin-top:0.25rem;">
+            <summary>Vedi full prompt</summary>
+            <pre>{{ op.system_prompt }}</pre>
+        </details>
+        {% endif %}
+
+        <details style="margin-top:0.25rem;">
+            <summary>Vedi JSON completo</summary>
+            <pre>{{ op.raw_payload | tojson(indent=2) }}</pre>
+        </details>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<p>Nessuna operazione trovata nel range selezionato.</p>
+{% endif %}

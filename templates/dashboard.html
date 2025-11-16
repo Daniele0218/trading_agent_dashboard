@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Trading Agent{% endblock %}
+
+{% block content %}
+<section class="layout-main-row">
+    <!-- Colonna sinistra: equity curve + posizioni aperte -->
+    <div style="display:flex; flex-direction:column; gap:1rem;">
+        <article class="card">
+            <div style="margin-bottom:0.5rem;">
+                <h2><span class="accent-dot"></span> Equity curve</h2>
+                <p class="card-subtitle">Valore del conto nel tempo, dalla prima osservazione all'ultima disponibile.</p>
+            </div>
+            <div id="balance-panel" hx-get="/ui/balance" hx-trigger="load">
+                <!-- Grafico saldo caricato via HTMX -->
+            </div>
+        </article>
+
+        <article class="card">
+            <div style="margin-bottom:0.5rem;">
+                <h2><span class="accent-dot"></span> Posizioni aperte</h2>
+                <p class="card-subtitle">Snapshot più recente delle posizioni correnti, con PnL colorato.</p>
+            </div>
+            <div id="open-positions-row" class="open-positions-row" hx-get="/ui/open-positions" hx-trigger="load">
+                <!-- Posizioni aperte caricate via HTMX come card orizzontali -->
+            </div>
+        </article>
+    </div>
+
+    <!-- Colonna destra: ultime operazioni dell'agente -->
+    <aside class="card">
+        <div style="margin-bottom:0.5rem;">
+            <h2><span class="accent-dot"></span> Operazioni recenti</h2>
+            <p class="card-subtitle">Ultime 50 operazioni loggate dall'agente, con ragionamento e prompt.</p>
+        </div>
+        <div id="bot-operations-column" class="operations-column" hx-get="/ui/bot-operations" hx-trigger="load">
+            <!-- Operazioni caricate via HTMX come box verticali -->
+        </div>
+    </aside>
+</section>
+{% endblock %}

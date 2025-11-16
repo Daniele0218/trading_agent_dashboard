@@ -1,0 +1,41 @@
+{% if positions %}
+<div class="open-positions-row">
+    {% for pos in positions %}
+    <div class="position-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+            <strong>{{ pos.symbol }}</strong>
+            {% if pos.side %}
+            <span class="tag {% if pos.side|lower == 'long' %}tag-long{% elif pos.side|lower == 'short' %}tag-short{% endif %}">
+                {{ pos.side|capitalize }}
+            </span>
+            {% endif %}
+        </div>
+        <p style="margin-bottom:0.25rem;">
+            Size: {{ '%.6f' | format(pos.size) }}
+        </p>
+        <p style="margin-bottom:0.25rem;">
+            Entry: {% if pos.entry_price is not none %}{{ '%.4f' | format(pos.entry_price) }}{% else %}-{% endif %}
+            · Mark: {% if pos.mark_price is not none %}{{ '%.4f' | format(pos.mark_price) }}{% else %}-{% endif %}
+        </p>
+        <p style="margin-bottom:0.25rem;">
+            PnL:
+            {% if pos.pnl_usd is not none %}
+                <span class="{% if pos.pnl_usd >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}">
+                    {{ '%.4f' | format(pos.pnl_usd) }} USD
+                </span>
+            {% else %}
+                -
+            {% endif %}
+        </p>
+        <p style="margin-bottom:0.25rem;">
+            <small>Leverage: {{ pos.leverage or '-' }}</small>
+        </p>
+        <p style="margin-bottom:0;">
+            <small>Snapshot: {{ pos.snapshot_created_at }}</small>
+        </p>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p>Nessuna posizione aperta trovata.</p>
+{% endif %}
