@@ -137,6 +137,7 @@
             transform: translateY(-1px);
         }
 
+        /* (social-btn CSS può restare, anche se non lo usi più: non cambia nulla) */
         .social-btn {
             display: inline-flex;
             align-items: center;
@@ -286,7 +287,6 @@
             text-decoration: underline;
         }
 
-        /* Stats Grid Styles */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -328,7 +328,6 @@
             color: var(--text-muted);
         }
 
-        /* Footer Styles */
         .app-footer {
             margin-top: 3rem;
             padding-top: 1.5rem;
@@ -370,55 +369,13 @@
         <header>
             <div class="header-strip">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-                    <!-- Left Column: Title, Subtitle, Description, Socials -->
-                    <div style="display: flex; flex-direction: column; gap: 0.75rem; max-width: 700px;">
+                    <!-- Left Column: Title + Author only -->
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 700px;">
                         <div>
                             <h1>Trading Agent Dashboard</h1>
-                            <p
-                                style="font-size: 1.1rem; color: var(--text-muted); font-weight: 400; margin-bottom: 0.5rem;">
-                                by <span style="color: var(--accent); font-weight: 600;">Simone Rizzo</span>
+                            <p style="font-size: 1.1rem; color: var(--text-muted); font-weight: 400; margin-bottom: 0;">
+                                By <span style="color: var(--accent); font-weight: 600;">Daniele Militello</span>
                             </p>
-                            <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.5;">
-                                Progetto didattico a cura della serie YouTube "Creo il mio AI trading
-                                agent".<br>
-                                Tutto il codice dell'agente è disponibile all'interno della Rizzo AI Academy.<br>
-                                Per aggiornamenti costanti puoi seguire su Instagram 👇.
-                            </p>
-                        </div>
-
-                        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-                            <a href="https://www.youtube.com/watch?v=Vrl2Ar_SvSo&list=PLYtHoWz0tONvqawl66HkjgLkEy7xi_6Yp"
-                                target="_blank" class="social-btn" aria-label="YouTube Series">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round">
-                                    <path
-                                        d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17">
-                                    </path>
-                                    <path d="m10 15 5-3-5-3z"></path>
-                                </svg>
-                                YouTube
-                            </a>
-                            <a href="http://rizzoaiacademy.com/" target="_blank" class="social-btn"
-                                aria-label="Rizzo AI Academy">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round">
-                                    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path>
-                                </svg>
-                                Academy
-                            </a>
-                            <a href="https://www.instagram.com/simorizzo_ai/" target="_blank" class="social-btn"
-                                aria-label="Instagram">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round">
-                                    <rect width="20" height="20" x="2" y="2" rx="5" ry="5"></rect>
-                                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-                                    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"></line>
-                                </svg>
-                                Instagram
-                            </a>
                         </div>
                     </div>
 
