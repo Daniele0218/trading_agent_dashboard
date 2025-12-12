@@ -24,6 +24,21 @@ if not DATABASE_URL:
         "ad esempio: postgresql://user:password@localhost:5432/trading_db",
     )
 
+# ======== CONFIG DASH (env) ========
+# Capitale iniziale desiderato (default 19$)
+STARTING_EQUITY_USD = float(os.getenv("STARTING_EQUITY_USD", "19"))
+
+# Data/ora da cui far partire performance e dati dashboard (ISO 8601)
+# Esempio: 2025-12-12T13:00:00+01:00
+DASH_START_AT_RAW = os.getenv("DASH_START_AT")
+try:
+    DASH_START_AT: Optional[datetime] = (
+        datetime.fromisoformat(DASH_START_AT_RAW) if DASH_START_AT_RAW else None
+    )
+except ValueError:
+    # Se formato sbagliato, non blocchiamo la dashboard: semplicemente non filtriamo
+    DASH_START_AT = None
+
 
 @contextmanager
 def get_connection():
@@ -31,7 +46,6 @@ def get_connection():
 
     Usa il DSN in DATABASE_URL.
     """
-
     conn = psycopg2.connect(DATABASE_URL)
     try:
         yield conn
@@ -103,7 +117,7 @@ app = FastAPI(
         "API per leggere i dati del trading agent dal database Postgres: "
         "saldo nel tempo, posizioni aperte, operazioni del bot con full prompt."
     ),
-    version="0.3.1",
+    version="0.3.2",
 )
 
 templates = Jinja2Templates(directory="templates")
@@ -116,47 +130,66 @@ templates = Jinja2Templates(directory="templates")
 
 @app.get("/balance", response_model=List[BalancePoint])
 def get_balance() -> List[BalancePoint]:
-    """Restituisce TUTTA la storia del saldo (balance_usd) ordinata nel tempo.
+    """Restituisce la storia del saldo (balance_usd) ordinata nel tempo.
 
+    Se DASH_START_AT è impostata, filtra i punti a partire da quella data/ora.
     I dati sono presi dalla tabella `account_snapshots`.
     """
-
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT created_at, balance_usd
-                FROM account_snapshots
-                ORDER BY created_at ASC;
-                """
-            )
+            if DASH_START_AT:
+                cur.execute(
+                    """
+                    SELECT created_at, balance_usd
+                    FROM account_snapshots
+                    WHERE created_at >= %s
+                    ORDER BY created_at ASC;
+                    """,
+                    (DASH_START_AT,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT created_at, balance_usd
+                    FROM account_snapshots
+                    ORDER BY created_at ASC;
+                    """
+                )
             rows = cur.fetchall()
 
-    return [
-        BalancePoint(timestamp=row[0], balance_usd=float(row[1]))
-        for row in rows
-    ]
+    return [BalancePoint(timestamp=row[0], balance_usd=float(row[1])) for row in rows]
 
 
 @app.get("/open-positions", response_model=List[OpenPosition])
 def get_open_positions() -> List[OpenPosition]:
     """Restituisce le posizioni aperte dell'ULTIMO snapshot disponibile.
 
-    - Prende l'ultimo record da `account_snapshots`.
-    - Recupera le posizioni corrispondenti da `open_positions`.
+    Se DASH_START_AT è impostata, prende l'ultimo snapshot a partire da quella data/ora.
     """
-
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Ultimo snapshot
-            cur.execute(
-                """
-                SELECT id, created_at
-                FROM account_snapshots
-                ORDER BY created_at DESC
-                LIMIT 1;
-                """
-            )
+            # Ultimo snapshot (filtrato se richiesto)
+            if DASH_START_AT:
+                cur.execute(
+                    """
+                    SELECT id, created_at
+                    FROM account_snapshots
+                    WHERE created_at >= %s
+                    ORDER BY created_at DESC
+                    LIMIT 1;
+                    """,
+                    (DASH_START_AT,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id, created_at
+                    FROM account_snapshots
+                    ORDER BY created_at DESC
+                    LIMIT 1;
+                    """
+                )
+
             row = cur.fetchone()
             if not row:
                 return []
@@ -204,109 +237,114 @@ def get_open_positions() -> List[OpenPosition]:
 @app.get("/closed-positions", response_model=List[ClosedPosition])
 def get_closed_positions() -> List[ClosedPosition]:
     """Calcola le posizioni chiuse confrontando gli snapshot consecutivi.
-    
+
+    Se DASH_START_AT è impostata, usa solo gli snapshot a partire da quella data/ora.
     Logica:
     - Se una posizione esiste in T ma non in T+1, è stata chiusa.
     - Il PnL realizzato è l'ultimo PnL registrato in T.
     """
-    
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Recuperiamo tutti gli snapshot con le loro posizioni
-            # Usiamo una query che ci dia snapshot_id, created_at e il json delle posizioni
-            cur.execute(
-                """
-                SELECT 
-                    s.id, 
-                    s.created_at,
-                    op.symbol,
-                    op.side,
-                    op.entry_price,
-                    op.mark_price,
-                    op.pnl_usd,
-                    op.leverage
-                FROM account_snapshots s
-                JOIN open_positions op ON s.id = op.snapshot_id
-                ORDER BY s.created_at ASC;
-                """
-            )
+            if DASH_START_AT:
+                cur.execute(
+                    """
+                    SELECT 
+                        s.id, 
+                        s.created_at,
+                        op.symbol,
+                        op.side,
+                        op.entry_price,
+                        op.mark_price,
+                        op.pnl_usd,
+                        op.leverage
+                    FROM account_snapshots s
+                    JOIN open_positions op ON s.id = op.snapshot_id
+                    WHERE s.created_at >= %s
+                    ORDER BY s.created_at ASC;
+                    """,
+                    (DASH_START_AT,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT 
+                        s.id, 
+                        s.created_at,
+                        op.symbol,
+                        op.side,
+                        op.entry_price,
+                        op.mark_price,
+                        op.pnl_usd,
+                        op.leverage
+                    FROM account_snapshots s
+                    JOIN open_positions op ON s.id = op.snapshot_id
+                    ORDER BY s.created_at ASC;
+                    """
+                )
             rows = cur.fetchall()
 
-    # Organizziamo i dati per snapshot
     snapshots_map = {}
     for row in rows:
         snap_id = row[0]
         created_at = row[1]
-        
+
         if snap_id not in snapshots_map:
-            snapshots_map[snap_id] = {
-                'created_at': created_at,
-                'positions': {}
-            }
-        
-        # Chiave univoca per la posizione: Symbol + Side
-        # (assumiamo che non ci siano due posizioni opposte sullo stesso simbolo nello stesso momento, 
-        # o se ci sono, il bot le gestisce come hedge mode, ma per ora semplifichiamo)
+            snapshots_map[snap_id] = {"created_at": created_at, "positions": {}}
+
         pos_key = f"{row[2]}_{row[3]}"
-        
-        snapshots_map[snap_id]['positions'][pos_key] = {
-            'symbol': row[2],
-            'side': row[3],
-            'entry_price': float(row[4]) if row[4] is not None else 0,
-            'mark_price': float(row[5]) if row[5] is not None else 0,
-            'pnl_usd': float(row[6]) if row[6] is not None else 0,
-            'leverage': row[7]
+        snapshots_map[snap_id]["positions"][pos_key] = {
+            "symbol": row[2],
+            "side": row[3],
+            "entry_price": float(row[4]) if row[4] is not None else 0,
+            "mark_price": float(row[5]) if row[5] is not None else 0,
+            "pnl_usd": float(row[6]) if row[6] is not None else 0,
+            "leverage": row[7],
         }
 
-    # Ordiniamo gli snapshot per data
-    sorted_snap_ids = sorted(snapshots_map.keys(), key=lambda k: snapshots_map[k]['created_at'])
-    
-    closed_positions = []
-    position_start_times = {} # key -> datetime (quando è stata vista la prima volta)
+    sorted_snap_ids = sorted(
+        snapshots_map.keys(), key=lambda k: snapshots_map[k]["created_at"]
+    )
 
-    # Iteriamo su tutti gli snapshot
+    closed_positions = []
+    position_start_times = {}
+
     for i in range(len(sorted_snap_ids)):
         curr_id = sorted_snap_ids[i]
         curr_snap = snapshots_map[curr_id]
-        curr_positions = curr_snap['positions']
-        curr_time = curr_snap['created_at']
+        curr_positions = curr_snap["positions"]
+        curr_time = curr_snap["created_at"]
 
-        # 1. Registriamo data inizio per nuove posizioni
         for pos_key in curr_positions:
             if pos_key not in position_start_times:
                 position_start_times[pos_key] = curr_time
-        
-        # 2. Se non è l'ultimo snapshot, cerchiamo le chiusure confrontando con il successivo
+
         if i < len(sorted_snap_ids) - 1:
-            next_id = sorted_snap_ids[i+1]
+            next_id = sorted_snap_ids[i + 1]
             next_snap = snapshots_map[next_id]
-            next_positions = next_snap['positions']
-            next_time = next_snap['created_at']
-            
-            # Cerchiamo posizioni che sono in curr ma NON in next
+            next_positions = next_snap["positions"]
+            next_time = next_snap["created_at"]
+
             for pos_key, pos_data in curr_positions.items():
                 if pos_key not in next_positions:
-                    # Trovata posizione chiusa!
                     opened_at = position_start_times.get(pos_key, curr_time)
-                    
-                    closed_positions.append(ClosedPosition(
-                        symbol=pos_data['symbol'],
-                        side=pos_data['side'],
-                        entry_price=pos_data['entry_price'],
-                        exit_price=pos_data['mark_price'],
-                        pnl_usd=pos_data['pnl_usd'],
-                        opened_at=opened_at,
-                        closed_at=next_time,
-                        leverage=pos_data['leverage']
-                    ))
-                    
-                    # Rimuoviamo dal tracking perché è chiusa
+
+                    closed_positions.append(
+                        ClosedPosition(
+                            symbol=pos_data["symbol"],
+                            side=pos_data["side"],
+                            entry_price=pos_data["entry_price"],
+                            exit_price=pos_data["mark_price"],
+                            pnl_usd=pos_data["pnl_usd"],
+                            opened_at=opened_at,
+                            closed_at=next_time,
+                            leverage=pos_data["leverage"],
+                        )
+                    )
+
                     if pos_key in position_start_times:
                         del position_start_times[pos_key]
-    
-    # Ordiniamo le posizioni chiuse dalla più recente
+
     closed_positions.sort(key=lambda x: x.closed_at, reverse=True)
-    
     return closed_positions
 
 
@@ -321,41 +359,68 @@ def get_bot_operations(
 ) -> List[BotOperation]:
     """Restituisce le ULTIME `limit` operazioni del bot con il full system prompt.
 
-    - I dati provengono da `bot_operations` uniti a `ai_contexts`.
-    - Ordinati da più recente a meno recente.
+    Nota: le operazioni sono ordinate per created_at DESC.
+    Se vuoi anche qui filtrare per DASH_START_AT, aggiungiamo WHERE bo.created_at >= %s.
     """
-
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    bo.id,
-                    bo.created_at,
-                    bo.operation,
-                    bo.symbol,
-                    bo.direction,
-                    bo.target_portion_of_balance,
-                    bo.leverage,
-                    bo.raw_payload,
-                    ac.system_prompt,
-                    -- Indicators (match su context_id e symbol/ticker)
-                    ic.rsi_7,
-                    ic.macd,
-                    ic.price,
-                    -- Forecasts (match su context_id e symbol/ticker)
-                    fc.prediction,
-                    fc.lower_bound,
-                    fc.upper_bound
-                FROM bot_operations AS bo
-                LEFT JOIN ai_contexts AS ac ON bo.context_id = ac.id
-                LEFT JOIN indicators_contexts AS ic ON bo.context_id = ic.context_id AND bo.symbol = ic.ticker
-                LEFT JOIN forecasts_contexts AS fc ON bo.context_id = fc.context_id AND bo.symbol = fc.ticker
-                ORDER BY bo.created_at DESC
-                LIMIT %s;
-                """,
-                (limit,),
-            )
+            if DASH_START_AT:
+                cur.execute(
+                    """
+                    SELECT
+                        bo.id,
+                        bo.created_at,
+                        bo.operation,
+                        bo.symbol,
+                        bo.direction,
+                        bo.target_portion_of_balance,
+                        bo.leverage,
+                        bo.raw_payload,
+                        ac.system_prompt,
+                        ic.rsi_7,
+                        ic.macd,
+                        ic.price,
+                        fc.prediction,
+                        fc.lower_bound,
+                        fc.upper_bound
+                    FROM bot_operations AS bo
+                    LEFT JOIN ai_contexts AS ac ON bo.context_id = ac.id
+                    LEFT JOIN indicators_contexts AS ic ON bo.context_id = ic.context_id AND bo.symbol = ic.ticker
+                    LEFT JOIN forecasts_contexts AS fc ON bo.context_id = fc.context_id AND bo.symbol = fc.ticker
+                    WHERE bo.created_at >= %s
+                    ORDER BY bo.created_at DESC
+                    LIMIT %s;
+                    """,
+                    (DASH_START_AT, limit),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT
+                        bo.id,
+                        bo.created_at,
+                        bo.operation,
+                        bo.symbol,
+                        bo.direction,
+                        bo.target_portion_of_balance,
+                        bo.leverage,
+                        bo.raw_payload,
+                        ac.system_prompt,
+                        ic.rsi_7,
+                        ic.macd,
+                        ic.price,
+                        fc.prediction,
+                        fc.lower_bound,
+                        fc.upper_bound
+                    FROM bot_operations AS bo
+                    LEFT JOIN ai_contexts AS ac ON bo.context_id = ac.id
+                    LEFT JOIN indicators_contexts AS ic ON bo.context_id = ic.context_id AND bo.symbol = ic.ticker
+                    LEFT JOIN forecasts_contexts AS fc ON bo.context_id = fc.context_id AND bo.symbol = fc.ticker
+                    ORDER BY bo.created_at DESC
+                    LIMIT %s;
+                    """,
+                    (limit,),
+                )
             rows = cur.fetchall()
 
     operations: List[BotOperation] = []
@@ -391,14 +456,12 @@ def get_bot_operations(
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
     """Dashboard principale HTML."""
-
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
 @app.get("/ui/balance", response_class=HTMLResponse)
 async def ui_balance(request: Request) -> HTMLResponse:
     """Partial HTML con il grafico del saldo nel tempo."""
-
     points = get_balance()
     labels = [p.timestamp.isoformat() for p in points]
     values = [p.balance_usd for p in points]
@@ -411,7 +474,6 @@ async def ui_balance(request: Request) -> HTMLResponse:
 @app.get("/ui/open-positions", response_class=HTMLResponse)
 async def ui_open_positions(request: Request) -> HTMLResponse:
     """Partial HTML con le posizioni aperte (ultimo snapshot)."""
-
     positions = get_open_positions()
     return templates.TemplateResponse(
         "partials/open_positions_table.html",
@@ -422,7 +484,6 @@ async def ui_open_positions(request: Request) -> HTMLResponse:
 @app.get("/ui/bot-operations", response_class=HTMLResponse)
 async def ui_bot_operations(request: Request) -> HTMLResponse:
     """Partial HTML con le ultime operazioni del bot."""
-
     operations = get_bot_operations(limit=10)
     return templates.TemplateResponse(
         "partials/bot_operations_table.html",
@@ -432,121 +493,74 @@ async def ui_bot_operations(request: Request) -> HTMLResponse:
 
 @app.get("/ui/closed-positions", response_class=HTMLResponse)
 async def ui_closed_positions(request: Request) -> HTMLResponse:
-    """Partial HTML con lo storico delle posizioni chiuse e statistiche."""
-
+    """Partial HTML con lo storico delle posizioni chiuse e statistiche (periodo filtrato)."""
     positions = get_closed_positions()
-    
-    # Data split per versione 0.0.2
-    split_date = datetime(2025, 12, 5).date()
-    
-    # --- Split Positions ---
-    # Usiamo opened_at per decidere la versione
-    current_positions = [p for p in positions if p.opened_at.date() >= split_date]
-    archive_positions = [p for p in positions if p.opened_at.date() < split_date]
-    
-    def calculate_stats(pos_list):
-        total = len(pos_list)
-        wins = len([p for p in pos_list if p.pnl_usd > 0])
-        losses = total - wins
-        win_rate = (wins / total * 100) if total > 0 else 0
-        return {
-            "total": total,
-            "wins": wins,
-            "losses": losses,
-            "win_rate": round(win_rate, 1)
-        }
 
-    current_stats = calculate_stats(current_positions)
-    archive_stats = calculate_stats(archive_positions)
+    total = len(positions)
+    wins = len([p for p in positions if p.pnl_usd > 0])
+    losses = total - wins
+    win_rate = (wins / total * 100) if total > 0 else 0
 
-    # Limitiamo a 20 per la visualizzazione della lista per ogni sezione
+    stats = {
+        "total": total,
+        "wins": wins,
+        "losses": losses,
+        "win_rate": round(win_rate, 1),
+    }
+
+    # Mostriamo le ultime 20
     return templates.TemplateResponse(
         "partials/closed_positions_table.html",
         {
-            "request": request, 
-            "current_positions": current_positions[:20],
-            "archive_positions": archive_positions[:20],
-            "current_stats": current_stats,
-            "archive_stats": archive_stats
+            "request": request,
+            "positions": positions[:20],
+            "stats": stats,
         },
     )
 
 
 @app.get("/ui/pnl-stats", response_class=HTMLResponse)
 async def ui_pnl_stats(request: Request) -> HTMLResponse:
-    """Partial HTML con le statistiche di PnL (infografica)."""
-
+    """Partial HTML con le statistiche di PnL (infografica) basate su STARTING_EQUITY_USD."""
     points = get_balance()
-    
+
+    # Se non ci sono punti (o non ci sono ancora punti dopo DASH_START_AT)
     if not points:
+        current_stats = {
+            "initial_balance": STARTING_EQUITY_USD,
+            "current_balance": STARTING_EQUITY_USD,
+            "pnl_usd": 0.0,
+            "pnl_percent": 0.0,
+        }
         return templates.TemplateResponse(
             "partials/pnl_stats.html",
             {
                 "request": request,
-                "current_stats": None,
+                "current_stats": current_stats,
                 "archive_stats": None,
-                "has_data": False
+                "has_data": True,
             },
         )
 
-    # Data split per versione 0.0.2
-    # Usiamo una data naive o aware a seconda di come arrivano dal DB, 
-    # ma per sicurezza convertiamo tutto a naive per il confronto o gestiamo la timezone.
-    # Assumiamo che il DB restituisca datetime.
-    split_date = datetime(2025, 12, 5).date()
+    initial_balance = STARTING_EQUITY_USD
+    current_balance = points[-1].balance_usd
+    pnl_usd = current_balance - initial_balance
+    pnl_percent = (pnl_usd / initial_balance * 100) if initial_balance != 0 else 0
 
-    # --- Calcolo Stats Archivio (v0.0.1) ---
-    # Tutti i punti PRIMA del 5/12/2025
-    archive_points = [p for p in points if p.timestamp.date() < split_date]
-    
-    archive_stats = None
-    if archive_points:
-        initial_balance_old = archive_points[0].balance_usd
-        final_balance_old = archive_points[-1].balance_usd
-        pnl_usd_old = final_balance_old - initial_balance_old
-        pnl_percent_old = (pnl_usd_old / initial_balance_old * 100) if initial_balance_old != 0 else 0
-        
-        archive_stats = {
-            "initial_balance": initial_balance_old,
-            "current_balance": final_balance_old,
-            "pnl_usd": pnl_usd_old,
-            "pnl_percent": pnl_percent_old,
-        }
-
-    # --- Calcolo Stats Correnti (v0.0.2) ---
-    # Tutti i punti DAL 5/12/2025 in poi
-    # Equity iniziale forzata a 1032$ come richiesto
-    current_points = [p for p in points if p.timestamp.date() >= split_date]
-    
-    current_stats = None
-    if current_points:
-        initial_balance_new = 1032.0
-        current_balance_new = current_points[-1].balance_usd
-        pnl_usd_new = current_balance_new - initial_balance_new
-        pnl_percent_new = (pnl_usd_new / initial_balance_new * 100) if initial_balance_new != 0 else 0
-        
-        current_stats = {
-            "initial_balance": initial_balance_new,
-            "current_balance": current_balance_new,
-            "pnl_usd": pnl_usd_new,
-            "pnl_percent": pnl_percent_new,
-        }
-    else:
-        # Se non ci sono ancora dati per la nuova versione, mostriamo comunque l'iniziale
-        current_stats = {
-            "initial_balance": 1032.0,
-            "current_balance": 1032.0,
-            "pnl_usd": 0.0,
-            "pnl_percent": 0.0,
-        }
+    current_stats = {
+        "initial_balance": initial_balance,
+        "current_balance": current_balance,
+        "pnl_usd": pnl_usd,
+        "pnl_percent": pnl_percent,
+    }
 
     return templates.TemplateResponse(
         "partials/pnl_stats.html",
         {
             "request": request,
             "current_stats": current_stats,
-            "archive_stats": archive_stats,
-            "has_data": True
+            "archive_stats": None,
+            "has_data": True,
         },
     )
 
